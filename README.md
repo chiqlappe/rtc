@@ -1,2 +1,2 @@
 # rtc
-real time clock driver
+PC-8001にリアルタイムクロックを
