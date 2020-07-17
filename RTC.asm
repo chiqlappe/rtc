@@ -1,6 +1,11 @@
 
-;PC-8001用 リアルタイムクロックドライバ
-;2020/1/13
+;PC-8001 RTC-4543SA用 リアルタイムクロックドライバ
+
+;2020/07/17	BCDデコード追加
+;2020/01/13	V1.0
+
+;https://support.epson.biz/td/api/doc_check.php?dl=app_RTC-4543SA&lang=ja
+;http://akizukidenshi.com/catalog/g/gK-10722/
 
 ;--------------------------
 ;RTC	DIR	PPI	
@@ -31,17 +36,18 @@ RTC_CLK		EQU	00000100B	;PC2
 
 TIME_WRT	EQU	01663H		;ワークの日時情報をタイマICに書き込む
 TMRWRK		EQU	0EA76H		;タイマのワークエリア
+RS232BUF	EQU	0EDCEH		;RS-232Cバッファ
 
 
-	ORG	0C000H
+	ORG	RS232BUF
 
 	JP	READ_RTC	;
 	JP	WRITE_RTC	;
 
-TMRDATA:			;
-	DB	00H,00H,00H	;SEC(7BIT),MIN(7),HOUR(6)
-	DB	00H		;WEEK(3)
-	DB	00H,00H,00H	;DAY(6),MONTH(5),YEAR(8)
+TMRDATA:			;日時情報をBCD形式でセットしてWRITE_RTCをコールすると登録される
+	DB	00H,00H,00H	;SEC,MIN,HOUR
+	DB	00H		;WEEK
+	DB	00H,00H,00H	;DAY,MONTH,YEAR
 
 ;-----------------------------
 ;RTCに日時情報を登録する
@@ -125,6 +131,7 @@ READ_RTC:
 
 	CALL	RTC_RECV	;月
 	AND	00011111B	;
+	CALL	DECODE_BCD	;BCDをデコードする
 	LD	(HL),A		;
 	INC	HL		;
 
@@ -136,6 +143,33 @@ READ_RTC:
 .L1:	XOR	A		;RTCのデータ出力を終了する
 	CALL	RTC_SET_CE	;
 	JP	RTC2MMC		;
+
+
+;-----------------------------
+;BCDをバイナリに変換する
+;IN	A=BCD
+;OUT	A=BINARY
+;-----------------------------
+DECODE_BCD:
+	PUSH	BC
+	LD	B,A
+	AND	00001111B
+	LD	C,A		;C<-1の位
+	LD	A,B
+	SRL	A
+	SRL	A
+	SRL	A
+	SRL	A
+	AND	A
+	JR	NZ,.L2
+	LD	A,C
+	JR	.L3
+.L2:	LD	B,A		;B<-10の位
+	LD	A,C
+.L1:	ADD	A,10
+	DJNZ	.L1
+.L3:	POP	BC
+	RET
 
 ;------------------------------------
 ;指定ビット数を読み出す
